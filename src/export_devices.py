@@ -1,23 +1,28 @@
 """
 export_devices.py - Step 2b: turn the clean simulation into messy "device" files.
 
-Block 1: CGM export.
-
 Input:   data/sim/clean.parquet        (from simulate.py)
-Output:  data/raw/cgm.csv              (what the app receives from the CGM sensor)
+Output:  data/raw/cgm.csv              (CGM sensor: UTC, gaps, duplicates, warm-up, compression lows)
+         data/raw/logbook.csv          (meals, boluses, hypo treatments: local time + offset)
+         data/raw/fingerstick.csv      (blood glucose meter: mmol/L, German date, no time zone)
          data/truth/cgm_flags.parquet  (where we put which artifact -> to check the ETL later)
 
 Run:     python src/export_devices.py
 """
 
-# 1. import 
-
+# ----------------------------------------------------------------------------
+# 1. Imports
+# ----------------------------------------------------------------------------
 from pathlib import Path
 
-import numpy as np 
-import pandas as pd 
+import numpy as np                 # random numbers and fast array math
+import pandas as pd
 
-# 2. setting 
+pd.set_option("display.width", 120)
+
+# ----------------------------------------------------------------------------
+# 2. Settings
+# ----------------------------------------------------------------------------
 SIM_FILE = Path("data/sim/clean.parquet")
 RAW_DIR = Path("data/raw")
 TRUTH_DIR = Path("data/truth")
@@ -25,7 +30,7 @@ TRUTH_DIR = Path("data/truth")
 TZ = "Europe/Vienna"               # patients live in Vienna (local time)
 PER_DAY = 288                      # 5-min steps per day (24 h x 12)
 
-SENSOR_CHANGE_DAY = 10             # new sensor at day 10 ->to have second warm-up
+SENSOR_CHANGE_DAY = 10             # new sensor at day 10 -> second warm-up
 CHANGE_GAP_STEPS = 6               # 30 min without data while changing the sensor
 WARMUP_STEPS = 24                  # first 2 h of each sensor are less accurate
 SHORT_GAP_RATE = 0.02              # 2 % of single values are lost (Bluetooth)
@@ -33,15 +38,22 @@ DUPLICATE_RATE = 0.01              # 1 % of rows are uploaded twice
 JITTER_SEC = 60                    # device clock is up to +-60 s off the 5-min grid
 CGM_MIN, CGM_MAX = 40, 400         # the sensor cannot report outside this range
 
-
-CARB_ERROR_SD = 0.20               # people misjudge carbs by about +-20 %. they forgot to log it on time. 
+CARB_ERROR_SD = 0.20               # people misjudge carbs by about +-20 %
 MEAL_MISS_RATE = 0.10              # 10 % of meals are never logged
 HYPO_MISS_RATE = 0.30              # 30 % of hypo treatments are never logged
 LOG_DELAY_MAX_MIN = 15             # manual entries are typed 0-15 min after eating
 BOLUS_MIN_U = 0.05                 # smaller insulin "spikes" are not a real bolus
 
-# 3. Function: make the CGM of one patinet messy 
+FS_HOURS = [7, 12, 18]             # fingersticks before breakfast, lunch, dinner
+FS_BEDTIME = 22                    # + a bedtime check on about half of the days
+FS_TIME_SD_MIN = 30                # people do not test at exactly the same time (+-30 min)
+METER_ERROR_SD = 0.05              # meter error about +-5 %
+MGDL_PER_MMOL = 18.0               # 1 mmol/L glucose = 18 mg/dL
 
+
+# ----------------------------------------------------------------------------
+# 3. Function: make the CGM of ONE patient messy
+# ----------------------------------------------------------------------------
 def make_cgm(p: pd.DataFrame, rng: np.random.Generator):
     """Return (export table, flag table) for one patient.
 
@@ -118,7 +130,9 @@ def make_cgm(p: pd.DataFrame, rng: np.random.Generator):
     return out, flags
 
 
-# 4. Function: build the logbook of ONE patient that is normally from meals and pump.  I considered pump log to be exact and automatic
+# ----------------------------------------------------------------------------
+# 4. Function: build the logbook of ONE patient
+# ----------------------------------------------------------------------------
 def make_logbook(p: pd.DataFrame, rng: np.random.Generator) -> pd.DataFrame:
     """Return the logbook events of one patient (meals, boluses, hypo treatments, basal rate).
 
@@ -162,20 +176,53 @@ def make_logbook(p: pd.DataFrame, rng: np.random.Generator) -> pd.DataFrame:
     lb["timestamp_local"] = lb["time"].dt.tz_localize(TZ).dt.strftime("%Y-%m-%dT%H:%M:%S%z")
     lb["patient_id"] = pid
     return lb[["patient_id", "timestamp_local", "event", "value", "unit", "source"]]
-# 5. main 
+
+
+# ----------------------------------------------------------------------------
+# 5. Function: build the fingerstick (blood glucose meter) values of ONE patient
+# ----------------------------------------------------------------------------
+def make_fingersticks(p: pd.DataFrame, rng: np.random.Generator) -> pd.DataFrame:
+    """Return 3-4 meter values per day: mmol/L, German date format, no time zone."""
+    pid = p["patient_id"].iloc[0]
+    bg = p.set_index("time")["bg_true"]            # true glucose, looked up by time
+    first_day = p["time"].iloc[0].normalize()      # midnight of day 0
+    n_days = len(p) // PER_DAY
+
+    rows = []
+    for d in range(n_days):
+        hours = FS_HOURS + ([FS_BEDTIME] if rng.random() < 0.5 else [])
+        for h in hours:
+            # when does the person test? planned hour +- up to 30 min
+            t = first_day + pd.Timedelta(days=d, hours=h,
+                                         minutes=rng.uniform(-FS_TIME_SD_MIN, FS_TIME_SD_MIN))
+            t = t.floor("min")                                    # meters show whole minutes
+            true = bg.asof(t)                                     # glucose at that moment (mg/dL)
+            meter = true * (1 + rng.normal(0, METER_ERROR_SD))    # meter error
+            rows.append((pid,
+                         t.strftime("%d.%m.%Y %H:%M"),            # German format, no time zone
+                         round(meter / MGDL_PER_MMOL, 1),         # mmol/L with 1 decimal
+                         "mmol/L"))
+
+    return pd.DataFrame(rows, columns=["patient_id", "datetime", "value", "unit"])
+
+
+# ----------------------------------------------------------------------------
+# 6. Main
+# ----------------------------------------------------------------------------
 if __name__ == "__main__":
     RAW_DIR.mkdir(parents=True, exist_ok=True)
     TRUTH_DIR.mkdir(parents=True, exist_ok=True)
 
     clean = pd.read_parquet(SIM_FILE).sort_values(["patient_id", "time"])
 
-    cgm_all, flags_all, logbook_all = [], [], []
+    cgm_all, flags_all, logbook_all, fs_all = [], [], [], []
     for pid, p in clean.groupby("patient_id"):
         rng = np.random.default_rng(int(pid[1:]))       # "P07" -> seed 7 (reproducible)
         out, flags = make_cgm(p, rng)
         cgm_all.append(out)
         flags_all.append(flags)
         logbook_all.append(make_logbook(p, rng))
+        fs_all.append(make_fingersticks(p, rng))
 
     cgm = pd.concat(cgm_all, ignore_index=True)
     flags = pd.concat(flags_all, ignore_index=True)
@@ -192,7 +239,6 @@ if __name__ == "__main__":
     print("  compression steps    :", flags["compression"].sum(),
           f"({flags.groupby('patient_id')['compression'].sum().gt(0).sum()} patients)")
 
-    
     logbook = pd.concat(logbook_all, ignore_index=True)
     logbook.to_csv(RAW_DIR / "logbook.csv", index=False)
     print("\nlogbook.csv:", len(logbook), "rows")
@@ -201,3 +247,8 @@ if __name__ == "__main__":
     print("  meals  :", (logbook["event"] == "carbs").sum(), "of", (clean["carbs_g"] > 0).sum())
     print("  hypos  :", (logbook["event"] == "hypo_treatment").sum(), "of", (clean["rescue_g"] > 0).sum())
     print("  boluses:", (logbook["event"] == "bolus").sum())
+
+    fs = pd.concat(fs_all, ignore_index=True)
+    fs.to_csv(RAW_DIR / "fingerstick.csv", index=False)
+    print("\nfingerstick.csv:", len(fs), "rows  (", round(len(fs) / clean["patient_id"].nunique() / 14, 1), "per day )")
+    print(fs.head(4))
