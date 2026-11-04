@@ -1,0 +1,7 @@
+model,RMSE all moments,RMSE big change (>=30),RMSE heading low (<90),MAE all,Clarke A+B %
+L0 persistence,32.2,66.3,19.3,20.5,97.6
+L1 Kalman trend,35.9,58.7,23.4,23.8,98.4
+L2 Ridge,25.1,47.2,18.3,16.0,98.0
+L3 LightGBM CGM,22.7,41.6,16.1,14.7,98.2
+L4 LightGBM +ins/carbs,21.8,38.2,15.6,14.2,98.3
+L5 LightGBM risk-weighted,22.0,38.6,13.3,14.3,98.9

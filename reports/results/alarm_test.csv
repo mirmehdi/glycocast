@@ -1,0 +1,3 @@
+,lows,caught %,lead time min,false alarms/day,alarms/day
+A forecast < thr,103.0,97.1,15.0,2.9,3.7
+B classifier,103.0,92.2,10.0,1.8,2.5

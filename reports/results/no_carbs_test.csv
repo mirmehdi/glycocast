@@ -1,0 +1,4 @@
+,RMSE all,RMSE big change
+L3 CGM only (never uses carbs),22.7,41.6
+L5 carbs logged,22.0,38.6
+L5 ALL carbs forgotten,22.3,39.3

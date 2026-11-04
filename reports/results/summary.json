@@ -1,0 +1,39 @@
+{
+  "created_utc": "2026-11-02T12:03:37+00:00",
+  "data": {
+    "file": "data/processed/train_v1.parquet",
+    "etl_version": "v1",
+    "etl_git_commit": "505a615"
+  },
+  "test_patients": [
+    "P08",
+    "P09",
+    "P10",
+    "P18",
+    "P19",
+    "P20",
+    "P28",
+    "P29",
+    "P30"
+  ],
+  "chosen_lightgbm": {
+    "num_leaves": 15,
+    "min_child_samples": 20,
+    "n_estimators": 291
+  },
+  "forecast_30min_L5": {
+    "RMSE all moments": 22.0,
+    "RMSE big change (>=30)": 38.6,
+    "RMSE heading low (<90)": 13.3,
+    "MAE all": 14.3,
+    "Clarke A+B %": 98.9
+  },
+  "alarm_threshold_mgdl": 80.0,
+  "alarm_test_method_A": {
+    "lows": 103.0,
+    "caught %": 97.1,
+    "lead time min": 15.0,
+    "false alarms/day": 2.9,
+    "alarms/day": 3.7
+  }
+}

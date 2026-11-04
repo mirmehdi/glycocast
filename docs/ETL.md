@@ -1,3 +1,25 @@
+My ETL takes three messy device files and turns them into one clean, versioned training table. The CGM data comes in UTC, the logbook in local time with an offset, and the blood glucose meter in a German date format with no time zone and in mmol/L.
+
+First, I standardized everything: all times to UTC, all glucose values to mg/dL, and I removed duplicate uploads. Then I put the CGM on a fixed 5-minute grid, so missing values became visible instead of hidden.
+
+Next, I cleaned the signal. I removed the first two hours of each sensor, because a new sensor reads too high during warm-up. I also wrote a simple rule for compression lows: a fall of more than 30 mg/dL within 15 minutes at night that comes back within an hour. Physiology can’t do that, only lying on the sensor can. Because I simulated the data, I had an answer key, so I could measure my cleaning: the rule found 91% of the fake lows with 86% precision. Short gaps up to 15 minutes I filled with a straight line, which I checked has an error about seven times smaller than the sensor noise.
+
+Then I built a causal Kalman filter. I expected it to denoise the CGM, but I measured it against the true glucose and it didn’t help. The sensor error had an autocorrelation of 0.96, so it was slow drift, not white noise, and smoothing can’t remove drift. That’s exactly why real sensors need fingerstick calibration. So I kept the filter only where it measurably helped: the rate-of-change estimate.
+
+After that, I created features that use only information available at that moment: insulin and carbs on board with exponential decay, time of day as sine and cosine, and a missing-data mask. And I created the targets: glucose in 15, 30, 60 and 120 minutes, and ‘low within 30 minutes.’
+
+One principle guided the design: targets may use hindsight, inputs may not. The cleaned target can use future values, but every input is strictly causal, so there is no leakage.
+
+Finally, I saved a versioned Parquet table with a metadata file: git commit, a hash of every input file, and all settings. So any model can be traced back to its exact data and code, which matters for MDR and GDPR regulation traceblility. I also produced a standard CGM report per patient and a QC plot that shows the raw signal, the cleaned signal and the true glucose together.”
+
+20-second version:
+“I built an ETL that standardizes three device files into one 5-minute grid, removes sensor warm-up and compression lows, and creates causal features and future targets. I validated every step against ground truth, for example 91% recall on compression lows. I found that the Kalman filter didn’t denoise, because the sensor error is slow drift. The output is a versioned, traceable training table.”
+
+
+
+
+
+
 # ETL – from messy device files to a clean training table
 
 `src/etl.py` turns three device exports into **one clean, versioned training table**

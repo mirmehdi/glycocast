@@ -1,0 +1,14 @@
+,coef
+age_code,-0.728
+day_min,-0.609
+day_sd,-0.598
+speed_22,-0.413
+evening_bolus,-0.134
+day_tbr70,-0.114
+chg_60_22,-0.1
+bg_22,0.006
+cob_22,0.072
+iob_22,0.222
+evening_carbs,0.274
+prev_night_low,0.464
+day_mean,0.709

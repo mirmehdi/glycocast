@@ -354,6 +354,7 @@ def add_events(g: pd.DataFrame, logbook: pd.DataFrame) -> pd.DataFrame:
     wide = (ev.pivot_table(index=["patient_id", "time_utc"], columns="event",
                            values="value", aggfunc="sum")
               .rename(columns={"bolus": "bolus_u", "carbs": "carbs_g", "hypo_treatment": "hypo_g"})
+              .reindex(columns=["bolus_u", "carbs_g", "hypo_g"])   # a missing event type -> empty column
               .reset_index())
     g = g.merge(wide, on=["patient_id", "time_utc"], how="left")
     g[["bolus_u", "carbs_g", "hypo_g"]] = g[["bolus_u", "carbs_g", "hypo_g"]].fillna(0)

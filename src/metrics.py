@@ -42,3 +42,44 @@ def clarke_a(y_true, y_pred) -> float:
     """Share of predictions in zone A only (%)."""
     zones = [clarke_zone(a, b) for a, b in zip(y_true, y_pred)]
     return 100 * np.mean([z == "A" for z in zones])
+
+
+def mard(y_true, y_pred) -> float:
+    """Mean absolute relative difference (%): typical error as a percent of the true value.
+    The same measure used for CGM sensor accuracy (good sensors: ~8-10 %)."""
+    y_true, y_pred = np.asarray(y_true, float), np.asarray(y_pred, float)
+    return float(100 * np.mean(np.abs(y_pred - y_true) / y_true))
+
+
+def clarke_shares(y_true, y_pred) -> dict:
+    """Share (%) of predictions in each Clarke zone A-E."""
+    zones = np.array([clarke_zone(a, b) for a, b in zip(y_true, y_pred)])
+    return {z: 100 * np.mean(zones == z) for z in "ABCDE"}
+
+
+def plot_clarke(ax, y_true, y_pred, title: str) -> None:
+    """Draw the Clarke error grid: true value (x) vs predicted value (y), with zone borders."""
+    ink, muted = "#0b0b0b", "#8a8984"
+    ax.scatter(y_true, y_pred, s=2, color="#2a78d6", alpha=0.15, linewidths=0)
+    # zone borders (standard Clarke 1987 layout, mg/dL)
+    lines = [([0, 400], [0, 400]), ([0, 175 / 3], [70, 70]), ([175 / 3, 400 / 1.2], [70, 400]),
+             ([70, 70], [84, 400]), ([0, 70], [180, 180]), ([70, 290], [180, 400]),
+             ([70, 70], [0, 56]), ([70, 400], [56, 320]), ([180, 180], [0, 70]),
+             ([180, 400], [70, 70]), ([240, 240], [70, 180]), ([240, 400], [180, 180]),
+             ([130, 180], [0, 70])]
+    for xs, ys in lines:
+        ax.plot(xs, ys, color=ink, lw=0.8, ls=":" if xs == [0, 400] else "-")
+    for label, x, y in [("A", 30, 15), ("B", 370, 260), ("B", 280, 370), ("C", 160, 370),
+                        ("C", 160, 15), ("D", 30, 140), ("D", 370, 120), ("E", 30, 370), ("E", 370, 15)]:
+        ax.text(x, y, label, fontsize=11, color=ink, ha="center", va="center")
+    s = clarke_shares(y_true, y_pred)
+    ax.set_title(f"{title}\nA {s['A']:.1f}%  B {s['B']:.1f}%  C {s['C']:.1f}%  D {s['D']:.1f}%  E {s['E']:.1f}%",
+                 fontsize=10, color=ink, loc="left")
+    ax.set_xlim(0, 400)
+    ax.set_ylim(0, 400)
+    ax.set_aspect("equal")
+    ax.set_xlabel("True glucose (mg/dL)", color=ink, fontsize=9)
+    ax.set_ylabel("Predicted glucose (mg/dL)", color=ink, fontsize=9)
+    ax.tick_params(colors=muted, labelsize=8)
+    for side in ["top", "right"]:
+        ax.spines[side].set_visible(False)

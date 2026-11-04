@@ -1,0 +1,4 @@
+,nights,night lows %,AUC,lows caught %,quiet nights correct %,nights with snack advice %,AUC vs TRUE lows
+rule: bedtime glucose <= 172,116.0,36.21,0.48,80.95,9.46,87.07,
+logistic regression (risk >= 0.25),116.0,36.21,0.57,78.57,27.03,75.0,0.7
+LightGBM (risk >= 0.06),116.0,36.21,0.62,95.24,17.57,87.07,0.75
