@@ -4,7 +4,7 @@ An end-to-end data science pipeline on continuous glucose monitoring (CGM) data:
 **simulated patients → messy device exports → ETL with signal processing → glucose forecast,
 low-glucose alarm and daily pattern profiles**, validated patient-wise with clinical metrics.
 
-It mirrors the kind of features mySugr / Roche Diabetes Care ships as certified medical
+It mirrors the kind of features that certified CGM apps ship as medical
 software (glucose prediction, low-glucose warning) under EU MDR / FDA.
 
 > Status: work in progress. See [Roadmap](#roadmap) for what is done and what is next.
@@ -185,7 +185,7 @@ HIPAA for US use, EU MDR / FDA for the medical feature.
 - [ ] AWS: S3 data lake + Athena
 - [ ] Privacy and regulatory section
 
-**Vision:** at mySugr scale, pretrain the TCN self-supervised on millions of unlabeled CGM
+**Vision:** at the scale of a large CGM app, pretrain the TCN self-supervised on millions of unlabeled CGM
 days and fine-tune it per task – a foundation model for CGM.
 
 ---
